@@ -19,7 +19,7 @@ float accX = 0.0F;
 float accY = 0.0F;
 float accZ = 0.0F;
 
-bool movementState = true;
+int movementState = 0;
 bool isOnAir = false;
 bool conectado = false;
 
@@ -137,11 +137,12 @@ void loop() {
   
   // change state
   if (M5.BtnB.wasPressed()) {
-    movementState = !movementState;
+    movementState += 1;
+    if (movementState == 3) movementState = 0; 
   }
 
   if (isOnAir) {
-    if (movementState) {
+    if (movementState == 0) {
       String x = "0", y = "0";
 
       if (accY > max_sine) {
@@ -160,7 +161,7 @@ void loop() {
         client.send("go " + x + " " + y + " 0 30");
         sentMsg = true;
       }
-    } else {
+    } else if (movementState == 1) {
       if (accY > max_sine) {
         client.send("down 20");
         sentMsg = true;
@@ -176,6 +177,8 @@ void loop() {
         client.send("ccw 10");
         sentMsg = true;
       }
+    } else {
+        // steady state
     }
   } 
 
