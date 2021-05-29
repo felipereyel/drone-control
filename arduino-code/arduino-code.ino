@@ -1,22 +1,34 @@
-#include <ArduinoWebsockets.h>
 #include <M5StickC.h>
+
 #include <WiFi.h>
+#include <WiFiUdp.h>
 
 #define max_sine 0.4
-#define min_mov 20
-#define pool_time 500
+#define pool_time 300
 #define takeoff_time 3000
 #define land_time 10000
 
 // const char *ssid = "Uma vez flamengo";
 // const char *password = "S3MPR3FL4M3NG0304";
-// const char *websockets_server = "ws://192.168.0.19:8000";
+
+// const char* TELLO_IP = "192.168.0.19";
+// const int PORT = 3000;
 
 const char *ssid = "TELLO-C470F1";
-const char *password = "XXX";
-const char *websockets_server = "ws://192.168.10.1:8889";
+const char *password = "";
 
-using namespace websockets;
+const char* TELLO_IP = "192.168.10.1";
+const int PORT = 8889;
+
+WiFiUDP Udp;
+char packetBuffer[255];
+String message = "";
+
+float x;
+float y;
+//
+char msgx[6];
+char msgy[6];
 
 float accX = 0.0F;
 float accY = 0.0F;
@@ -25,122 +37,100 @@ float accZ = 0.0F;
 int movementState = 0;
 bool isOnAir = false;
 bool conectado = false;
+bool sentMsg = false;
 
-WebsocketsClient client;
-
-void initScreen() {
-  M5.Lcd.fillTriangle(40, 159, 60, 139, 20, 139, BLACK);
-  M5.Lcd.drawTriangle(40, 159, 60, 139, 20, 139, RED);
-
-  M5.Lcd.fillTriangle(40, 0, 60, 20, 20, 20, BLACK);
-  M5.Lcd.drawTriangle(40, 0, 60, 20, 20, 20, BLUE);
-
-  M5.Lcd.fillTriangle(0, 80, 20, 100, 20, 60, BLACK);
-  M5.Lcd.drawTriangle(0, 80, 20, 100, 20, 60, GREEN);
-
-  M5.Lcd.fillTriangle(79, 80, 59, 100, 59, 60, BLACK);
-  M5.Lcd.drawTriangle(79, 80, 59, 100, 59, 60, YELLOW);
+void printMsg(int x, int y, int w, int h, uint16_t color, String msg) {
+  M5.Lcd.fillRect(x, y, w, h, color);
+  M5.Lcd.setCursor(x+10, y+1);
+  M5.Lcd.println(msg);
 }
 
-void onMessageCallback(WebsocketsMessage message) {
-  Serial.println(message.c_str());
+void print_status(String status_msg, uint16_t color){
+  printMsg(0, 0, 80, 10, BLACK, status_msg);
 }
 
-void onEventsCallback(WebsocketsEvent event, String data) {
-  if (event == WebsocketsEvent::ConnectionOpened) {
-    conectado = true;
-  } else if (event == WebsocketsEvent::ConnectionClosed) {
-    delay(1000);
-    ESP.restart();
-  } else if (event == WebsocketsEvent::GotPing) {
-    Serial.println("Got a Ping!");
-  } else if (event == WebsocketsEvent::GotPong) {
-    Serial.println("Got a Pong!");
+void print_movement_state(){
+  if (movementState == 0) {
+    print_status("horizontal", BLUE);
+  } else if (movementState == 1) {
+    print_status("vertical", CYAN);
+  } else {
+    print_status("steady", NAVY);
   }
+}
+
+void print_air_state(){
+  printMsg(0, 9, 80, 10, isOnAir ? RED : GREEN, isOnAir ? "On Air" : "On Land");
+}
+
+void print_command(String status_msg){
+  printMsg(0, 79, 80, 80, BLACK, status_msg);
+}
+
+void tello_command_exec(char* tello_command){
+  print_command(tello_command);
+
+  Udp.beginPacket(TELLO_IP, PORT);
+  Udp.printf(tello_command);
+  Udp.endPacket();
+  sentMsg = true;
+}
+
+String listenMessage() {
+  int packetSize = Udp.parsePacket();
+  if (packetSize) {
+    IPAddress remoteIp = Udp.remoteIP();
+    int len = Udp.read(packetBuffer, 255);
+    if (len > 0) {
+      packetBuffer[len] = 0;
+    }
+  }
+  return (char*) packetBuffer;
 }
 
 void ConectarWifi() {
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  M5.Lcd.setCursor(0, 10);
-  M5.Lcd.println("Conectando");
-
-  if (password == "XXX") {
-    WiFi.begin(ssid);
-  } else {
-    WiFi.begin(ssid, password);
-  }
+  print_status("Conectando", YELLOW);
+  WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
     M5.Lcd.print(".");
   }
-
-  Serial.println("WiFi conectado!");
-  Serial.println("Endereco de IP: ");
-  Serial.println(WiFi.localIP());
-  Serial.println();
   M5.Lcd.fillScreen(BLACK);
-  M5.Lcd.setCursor(0, 10);
-  M5.Lcd.println("Conectado");
+
+  print_status("WiFi OK", GREEN);
   delay(1000);
-  M5.Lcd.fillScreen(BLACK);
-}
-
-void ConectarWS() {
-  client.onMessage(onMessageCallback);
-  client.onEvent(onEventsCallback);
-
-  Serial.print("Connecting to WS");
-  M5.Lcd.setCursor(0, 10);
-  M5.Lcd.println("Conectando WS");
-  
-  while (!conectado) {
-    client.connect(websockets_server);
-    Serial.print(".");
-    M5.Lcd.print(".");
-    delay(1000);
-  }
-
-  Serial.println("WS conectado!");
-  M5.Lcd.fillScreen(BLACK);
-  M5.Lcd.setCursor(0, 10);
-  M5.Lcd.println("WS Conectado");
-  delay(1000);
-  M5.Lcd.fillScreen(BLACK);
-
-  client.send("command");
 }
 
 void setup() {
   M5.begin();
-  Serial.begin(115200);
-
   M5.IMU.Init();
-  M5.Lcd.setRotation(0);
-  M5.Lcd.setTextSize(1);
+  Wire.begin();
 
   ConectarWifi();
-  ConectarWS();
+  
+  Udp.begin(PORT);
+  tello_command_exec("command");
+
+  delay(2000);
 }
 
 void loop() {
-  client.poll();
+  print_air_state();
   M5.IMU.getAccelData(&accX, &accY, &accZ);
-  bool sentMsg = false;
+  sentMsg = false;
 
   // land / take off
   if (M5.BtnA.wasPressed()) {
     if (isOnAir) {
-      client.send("land");
+      tello_command_exec("land");
       delay(land_time);
     } else {
-      client.send("takeoff");
+      tello_command_exec("takeoff");
       delay(takeoff_time);
     }
-    sentMsg = true;
     isOnAir = !isOnAir;
+    print_air_state();
   }
   
   // change state
@@ -148,42 +138,34 @@ void loop() {
     movementState += 1;
     if (movementState == 3) movementState = 0; 
   }
+  print_movement_state();
 
   if (isOnAir) {
     if (movementState == 0) {
       String x = "0", y = "0";
 
       if (accY > max_sine) {
-        y = "-20"; // down
+        tello_command_exec("back 50"); // down
       } else if (accY < -max_sine) {
-        y = "20"; // up
+        tello_command_exec("forward 50"); // up
       }
       
       if (accX > max_sine) {
-        x = "-20"; // left
+        tello_command_exec("left 50"); // left
       } else if (accX < -max_sine){
-        x = "20"; // right
-      }
-
-      if (x != "0" || y != "0") {
-        client.send("go " + x + " " + y + " 0 30");
-        sentMsg = true;
+        tello_command_exec("right 50"); // right
       }
     } else if (movementState == 1) {
       if (accY > max_sine) {
-        client.send("down 20");
-        sentMsg = true;
+        tello_command_exec("down 50");
       } else if (accY < -max_sine) {
-        client.send("up 20");
-        sentMsg = true;
+        tello_command_exec("up 50");
       }
       
       if (accX > max_sine) {
-        client.send("cw 10");
-        sentMsg = true;
+        tello_command_exec("cw 10");
       } else if (accX < -max_sine){
-        client.send("ccw 10");
-        sentMsg = true;
+        tello_command_exec("ccw 10");
       }
     } else {
         // steady state
@@ -191,7 +173,7 @@ void loop() {
   } 
 
   if (!sentMsg) {
-    client.send("stop"); // keep-alive
+    tello_command_exec("stop"); // keep-alive
   }
 
   delay(pool_time);
