@@ -8,10 +8,13 @@
 #define takeoff_time 3000
 #define land_time 10000
 
-const char *ssid = "Uma vez flamengo";      // Enter SSID
-const char *password = "S3MPR3FL4M3NG0304"; // Enter Password
-const char *websockets_server =
-    "ws://192.168.0.19:8000"; // server adress and port
+// const char *ssid = "Uma vez flamengo";
+// const char *password = "S3MPR3FL4M3NG0304";
+// const char *websockets_server = "ws://192.168.0.19:8000";
+
+const char *ssid = "TELLO-C470F1";
+const char *password = "XXX";
+const char *websockets_server = "ws://192.168.10.1:8889";
 
 using namespace websockets;
 
@@ -62,7 +65,12 @@ void ConectarWifi() {
   M5.Lcd.setCursor(0, 10);
   M5.Lcd.println("Conectando");
 
-  WiFi.begin(ssid, password);
+  if (password == "XXX") {
+    WiFi.begin(ssid);
+  } else {
+    WiFi.begin(ssid, password);
+  }
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -102,7 +110,7 @@ void ConectarWS() {
   delay(1000);
   M5.Lcd.fillScreen(BLACK);
 
-  client.send("initialize / command");
+  client.send("command");
 }
 
 void setup() {
