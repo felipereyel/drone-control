@@ -4,7 +4,7 @@
 #include <WiFiUdp.h>
 
 #define max_sine 0.4
-#define pool_time 300
+#define pool_time 200
 #define takeoff_time 3000
 #define land_time 10000
 
@@ -24,47 +24,47 @@ WiFiUDP Udp;
 char packetBuffer[255];
 String message = "";
 
-float x;
-float y;
-//
-char msgx[6];
-char msgy[6];
-
 float accX = 0.0F;
 float accY = 0.0F;
 float accZ = 0.0F;
 
-int movementState = 0;
 bool isOnAir = false;
 bool conectado = false;
-bool sentMsg = false;
+
+int movementState = 0;
+int readState = 0;
+unsigned long msg_time;
 
 void printMsg(int x, int y, int w, int h, uint16_t color, String msg) {
   M5.Lcd.fillRect(x, y, w, h, color);
-  M5.Lcd.setCursor(x+10, y+1);
+  M5.Lcd.setCursor(x, y+3);
   M5.Lcd.println(msg);
 }
 
 void print_status(String status_msg, uint16_t color){
-  printMsg(0, 0, 80, 10, BLACK, status_msg);
+  printMsg(0, 14, 80, 15, BLACK, status_msg);
 }
 
 void print_movement_state(){
   if (movementState == 0) {
-    print_status("horizontal", BLUE);
+    print_status("Horizontal", BLUE);
   } else if (movementState == 1) {
-    print_status("vertical", CYAN);
+    print_status("Vertical", CYAN);
   } else {
-    print_status("steady", NAVY);
+    print_status("Steady", NAVY);
   }
 }
 
 void print_air_state(){
-  printMsg(0, 9, 80, 10, isOnAir ? RED : GREEN, isOnAir ? "On Air" : "On Land");
+  printMsg(0, 0, 80, 15, isOnAir ? RED : GREEN, isOnAir ? "On Air" : "On Land");
 }
 
 void print_command(String status_msg){
-  printMsg(0, 79, 80, 80, BLACK, status_msg);
+  printMsg(0, 79, 80, 40, BLACK, status_msg);
+}
+
+void print_message(String cmd){
+  printMsg(0, 139, 80, 40, PINK, cmd + "\n> " + message);
 }
 
 void tello_command_exec(char* tello_command){
@@ -73,10 +73,12 @@ void tello_command_exec(char* tello_command){
   Udp.beginPacket(TELLO_IP, PORT);
   Udp.printf(tello_command);
   Udp.endPacket();
-  sentMsg = true;
+  listenMessage(tello_command);
+  delay(100);
+  msg_time = millis();
 }
 
-String listenMessage() {
+void listenMessage(String cmd) {
   int packetSize = Udp.parsePacket();
   if (packetSize) {
     IPAddress remoteIp = Udp.remoteIP();
@@ -85,11 +87,12 @@ String listenMessage() {
       packetBuffer[len] = 0;
     }
   }
-  return (char*) packetBuffer;
+  message = (char*) packetBuffer;
+  print_message(cmd);
 }
 
 void ConectarWifi() {
-  print_status("Conectando", YELLOW);
+  print_status(" Conectando", YELLOW);
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -98,7 +101,7 @@ void ConectarWifi() {
   }
   M5.Lcd.fillScreen(BLACK);
 
-  print_status("WiFi OK", GREEN);
+  print_status(" WiFi OK", GREEN);
   delay(1000);
 }
 
@@ -111,17 +114,16 @@ void setup() {
   
   Udp.begin(PORT);
   tello_command_exec("command");
-
   delay(2000);
+  tello_command_exec("speed 40");
 }
 
 void loop() {
   print_air_state();
   M5.IMU.getAccelData(&accX, &accY, &accZ);
-  sentMsg = false;
 
   // land / take off
-  if (M5.BtnA.wasPressed()) {
+  if (M5.BtnB.wasPressed()) {
     if (isOnAir) {
       tello_command_exec("land");
       delay(land_time);
@@ -134,7 +136,7 @@ void loop() {
   }
   
   // change state
-  if (M5.BtnB.wasPressed()) {
+  if (M5.BtnA.wasPressed()) {
     movementState += 1;
     if (movementState == 3) movementState = 0; 
   }
@@ -142,8 +144,6 @@ void loop() {
 
   if (isOnAir) {
     if (movementState == 0) {
-      String x = "0", y = "0";
-
       if (accY > max_sine) {
         tello_command_exec("back 50"); // down
       } else if (accY < -max_sine) {
@@ -157,23 +157,33 @@ void loop() {
       }
     } else if (movementState == 1) {
       if (accY > max_sine) {
-        tello_command_exec("down 50");
-      } else if (accY < -max_sine) {
         tello_command_exec("up 50");
+      } else if (accY < -max_sine) {
+        tello_command_exec("down 50");
       }
       
       if (accX > max_sine) {
-        tello_command_exec("cw 10");
+        tello_command_exec("ccw 30");
       } else if (accX < -max_sine){
-        tello_command_exec("ccw 10");
+        tello_command_exec("cw 30");
       }
-    } else {
-        // steady state
     }
   } 
 
-  if (!sentMsg) {
-    tello_command_exec("stop"); // keep-alive
+  if (millis() - msg_time > 10000) { // keep-alive
+    if (readState == 0) {
+      tello_command_exec("battery?");
+      readState = 1;
+    } else if (readState == 1) {
+      tello_command_exec("wifi?");
+      readState = 2;
+    } else if (readState == 2) {
+      tello_command_exec("time?");
+      readState = 3;
+    } else {
+      tello_command_exec("temp?");
+      readState = 0;
+    }
   }
 
   delay(pool_time);
