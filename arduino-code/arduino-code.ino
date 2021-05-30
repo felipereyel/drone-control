@@ -170,7 +170,7 @@ void loop() {
     }
   } 
 
-  if (millis() - msg_time > 10000) { // keep-alive
+  if (millis() - msg_time > 3000) { // keep-alive
     if (readState == 0) {
       tello_command_exec("battery?");
       readState = 1;
