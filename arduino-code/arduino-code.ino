@@ -8,12 +8,6 @@
 #define takeoff_time 3000
 #define land_time 10000
 
-// const char *ssid = "Uma vez flamengo";
-// const char *password = "S3MPR3FL4M3NG0304";
-
-// const char* TELLO_IP = "192.168.0.19";
-// const int PORT = 3000;
-
 const char *ssid = "TELLO-C470F1";
 const char *password = "";
 
