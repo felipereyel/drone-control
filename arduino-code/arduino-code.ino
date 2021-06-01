@@ -57,8 +57,8 @@ void print_command(String status_msg){
   printMsg(0, 79, 80, 40, BLACK, status_msg);
 }
 
-void print_message(String cmd){
-  printMsg(0, 139, 80, 40, PINK, cmd + "\n> " + message);
+void print_message(){
+  printMsg(0, 139, 80, 40, PINK, "\n> " + message);
 }
 
 void tello_command_exec(char* tello_command){
@@ -67,12 +67,12 @@ void tello_command_exec(char* tello_command){
   Udp.beginPacket(TELLO_IP, PORT);
   Udp.printf(tello_command);
   Udp.endPacket();
-  listenMessage(tello_command);
+  listenMessage();
   delay(100);
   msg_time = millis();
 }
 
-void listenMessage(String cmd) {
+void listenMessage() {
   int packetSize = Udp.parsePacket();
   if (packetSize) {
     IPAddress remoteIp = Udp.remoteIP();
@@ -82,7 +82,7 @@ void listenMessage(String cmd) {
     }
   }
   message = (char*) packetBuffer;
-  print_message(cmd);
+  print_message();
 }
 
 void ConectarWifi() {
@@ -109,7 +109,7 @@ void setup() {
   Udp.begin(PORT);
   tello_command_exec("command");
   delay(2000);
-  tello_command_exec("speed 40");
+  tello_command_exec("speed 60");
 }
 
 void loop() {
@@ -139,21 +139,21 @@ void loop() {
   if (isOnAir) {
     if (movementState == 0) {
       if (accY > max_sine) {
-        tello_command_exec("back 50"); // down
+        tello_command_exec("back 35"); // down
       } else if (accY < -max_sine) {
-        tello_command_exec("forward 50"); // up
+        tello_command_exec("forward 35"); // up
       }
       
       if (accX > max_sine) {
-        tello_command_exec("left 50"); // left
+        tello_command_exec("left 35"); // left
       } else if (accX < -max_sine){
-        tello_command_exec("right 50"); // right
+        tello_command_exec("right 35"); // right
       }
     } else if (movementState == 1) {
       if (accY > max_sine) {
-        tello_command_exec("up 50");
+        tello_command_exec("up 35");
       } else if (accY < -max_sine) {
-        tello_command_exec("down 50");
+        tello_command_exec("down 35");
       }
       
       if (accX > max_sine) {
